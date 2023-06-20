@@ -1,0 +1,174 @@
+# Comparacion de Frentes de Pareto obtenidos por los algoritmos PF-CE and EPCEA.
+library(MOEADr)
+
+# Cargar los frentes de pareto del EPCEA.
+n <- 100
+p <- 6
+muestra <- 5
+
+load.file.pxe <- paste("Frentes_Pareto_EPCEA/nObs_", n, "_nCovar_", p, ".RData", sep = '')
+load(load.file.pxe)
+
+ii <- 5
+load.file.pxe <- paste("PXE_nObs_", n, "_nCovar_", p, "_Inst_", ii, ".RData", sep = '')
+load(load.file.pxe)
+X.Sol.pxe <- X.Sol
+
+load.file.pxe <- paste("Extremos_EC/AEC_nObs_", n, "_nCovar_", p, "_Inst_", ii,"_Opt_", 1, "_", muestra, "_muestras_.RData", sep = '')
+load(load.file.pxe)
+X.Sol.G <- do.call(cbind, X.Soluciones)
+# Remover soluciones repetidas.
+X.Sol.G <- X.Sol.G[,!duplicated(t(X.Sol.G[c(n+1,n+2),]))]
+
+load.file.pxe <- paste("Extremos_EC/AEC_nObs_", n, "_nCovar_", p, "_Inst_", ii,"_Opt_", 2, "_", muestra, "_muestras_.RData", sep = '')
+load(load.file.pxe)
+X.Sol.I <- do.call(cbind, X.Soluciones)
+# Remover soluciones repetidas.
+X.Sol.I <- X.Sol.I[,!duplicated(t(X.Sol.I[c(n+1,n+2),]))]
+
+frente.EPCEA <- cbind('Alg' = 1, 'I' = pareto.fronts[[ii]][,1],
+                       'G' = pareto.fronts[[ii]][,2])
+frente.PFCE <- cbind('Alg' = 2, 'I' = X.Sol.pxe[n + 2,],
+                     'G' = X.Sol.pxe[n + 1,])
+frente.AEC_G <- cbind('Alg' = 3, 'I' = X.Sol.G[n + 2,],
+                     'G' = X.Sol.G[n + 1,])
+frente.AEC_I <- cbind('Alg' = 4, 'I' = X.Sol.I[n + 2,],
+                      'G' = X.Sol.I[n + 1,])
+
+frentes <- rbind(frente.EPCEA, frente.PFCE, frente.AEC_G, frente.AEC_I)
+G.lim <- c(min(frentes[,'G']),max(frentes[,'G']))
+I.lim <- c(min(frentes[,'I']),max(frentes[,'I']))
+plot(x=1, ylab = 'G-optimalidad', 
+     xlab = 'I-optimalidad', pch = 3, type = 'n',
+     xlim = I.lim, ylim = G.lim, 
+     main = paste("Frentes de Pareto Instancia", ii))
+points(frente.EPCEA[,2], frente.EPCEA[,3], pch = 3, col = 'red')
+points(frente.PFCE[,2], frente.PFCE[,3], pch = 1, col = 'blue')
+points(frente.AEC_G[,2], frente.AEC_G[,3], pch = 2, col = 'brown')
+points(frente.AEC_I[,2], frente.AEC_I[,3], pch = 4, col = 'black')
+
+
+# Crear grafica de soluciones no-dominadas
+aux.vec <- find_nondominated_points(frentes[,c(2,3)])
+non.dom <- frentes[aux.vec, ]
+
+G.lim <- c(min(frentes[,'G']),max(frentes[,'G']))
+I.lim <- c(min(frentes[,'I']),max(frentes[,'I']))
+plot(x=1, ylab = 'G-optimalidad', 
+     xlab = 'I-optimalidad', pch = 3, type = 'n',
+     xlim = I.lim, ylim = G.lim, 
+     main = paste("Soluciones No Dominadas Instancia", ii))
+points(non.dom[non.dom[,1]==1,2], non.dom[non.dom[,1]==1,3], pch = 3, col = 'red')
+points(non.dom[non.dom[,1]==2,2], non.dom[non.dom[,1]==2,3], pch = 1, col = 'blue')
+points(non.dom[non.dom[,1]==3,2], non.dom[non.dom[,1]==3,3], pch = 2, col = 'brown')
+points(non.dom[non.dom[,1]==4,2], non.dom[non.dom[,1]==4,3], pch = 4, col = 'black')
+
+
+################ Pruebas de eficiencia de los algoritmos ################
+# Numero de puntos 
+No.EPCEA <- sum(non.dom[,1]==1)
+No.EC <- sum(non.dom[,1]!=1)
+
+
+
+#Separacion de datos
+EPCEA <- matrix(nrow = No.EPCEA, ncol = 4) #La columna 3 y 4 son datos para la k-distancia
+EC <- matrix(nrow = No.EC, ncol = 4)       # la 3 representa la media y la 4 el maximo del subconjunto
+con.epcea <- 1
+con.ec <- 1
+for(i in 1:nrow(non.dom)){
+        if(non.dom[i,1]==1){
+                EPCEA[con.epcea,1:2] <- rbind(non.dom[i,2:3])
+                con.epcea <- con.epcea + 1
+        }else{
+                EC[con.ec,1:2] <- rbind(non.dom[i,2:3])
+                con.ec <- con.ec + 1
+        }
+}
+
+# K-distance
+
+#matrices de distancias
+Dis.EPCEA <- matrix(nrow = nrow(EPCEA), ncol = nrow(EPCEA))
+Dis.EC <- matrix(nrow = nrow(EC), ncol = nrow(EC))
+
+for(i in 1:nrow(EPCEA)){
+        for(y in 1:nrow(EPCEA)){
+                Dis.EPCEA[i,y] <- sqrt((EPCEA[i,1]-EPCEA[y,1])^2 + (EPCEA[i,2]-EPCEA[y,2])^2)
+                if(Dis.EPCEA[i,y] == 0){
+                        Dis.EPCEA[i,y] <- 1000
+                }
+        }
+}
+
+for(i in 1:nrow(EC)){
+        for(y in 1:nrow(EC)){
+                Dis.EC[i,y] <- sqrt((EC[i,1]-EC[y,1])^2 + (EC[i,2]-EC[y,2])^2)
+                if(Dis.EPCEA[i,y] == 0){
+                        Dis.EPCEA[i,y] <- 1000
+                }
+        }
+}
+
+k <- 5
+
+for(i in 1:nrow(EPCEA)){
+        aux.k <- c(rep(0, k))
+        for(j in 1:k){
+                aux.k[j] <- min(Dis.EPCEA[i,])
+                Dis.EPCEA[i,which.min(Dis.EPCEA[i,])] <- 100
+        }
+        EPCEA[i,3] <- mean(aux.k)
+        EPCEA[i,4] <- max(aux.k)
+}
+colnames(EPCEA) <- c("I", "G", "Mean", "Max")
+Mean.EPCEA <- mean(EPCEA[,3])
+Max.EPCEA <- max(EPCEA[,4])
+
+
+for(i in 1:nrow(EC)){
+        aux.k <- c(rep(0, k))
+        for(j in 1:k){
+                aux.k[j] <- min(Dis.EC[i,])
+                Dis.EC[i,which.min(Dis.EC[i,])] <- 100
+        }
+        EC[i,3] <- mean(aux.k)
+        EC[i,4] <- max(aux.k)
+}
+colnames(EC) <- c("I", "G", "Mean", "Max")
+Mean.EC <- mean(EC[,3])
+Max.EC <- max(EC[,4])
+
+
+
+# SSC
+
+#EPCEA
+aux.x <- which.max(EPCEA[,1])
+aux.y <- which.max(EPCEA[,2])
+
+SSC.EPCEA <- (sqrt((EPCEA[aux.x,1]-EPCEA[aux.y,1])^2))*(sqrt((EPCEA[aux.x,2]-EPCEA[aux.y,2])^2))
+
+#EC
+aux.x <- which.max(EC[,1])
+aux.y <- which.max(EC[,2])
+
+SSC.EC <- (sqrt((EC[aux.x,1]-EC[aux.y,1])^2))*(sqrt((EC[aux.x,2]-EC[aux.y,2])^2))
+
+
+
+#Resultados
+No.EPCEA
+No.EC
+No.EPCEA < No.EC
+
+Mean.EPCEA
+Max.EPCEA
+Mean.EC
+Max.EC
+Mean.EPCEA < Mean.EC
+Max.EPCEA < Max.EC
+
+SSC.EPCEA
+SSC.EC
+SSC.EPCEA < SSC.EC
